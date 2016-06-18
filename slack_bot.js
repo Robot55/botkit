@@ -1,3 +1,15 @@
+// this code is run twice 
+// see implementation notes below 
+console.log(process.pid);
+ 
+// after this point, we are a daemon 
+require('daemon')();
+ 
+// different pid because we are now forked 
+// original parent has exited 
+console.log(process.pid);
+
+
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
            ______     ______     ______   __  __     __     ______
           /\  == \   /\  __ \   /\__  _\ /\ \/ /    /\ \   /\__  _\
@@ -23,10 +35,7 @@ This bot demonstrates many of the core features of Botkit:
 
     -> http://my.slack.com/services/new/bot
 
-  Run your bot from the command line:
-
-    token=<MY TOKEN> node slack_bot.js
-
+  
 # USE THE BOT:
 
   Find your bot inside Slack to send it a direct message.
@@ -63,21 +72,22 @@ This bot demonstrates many of the core features of Botkit:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-
+ following 3 lines = exit if no token 
 if (!process.env.token) {
     console.log('Error: Specify token in environment');
     process.exit(1);
 }
 
+
+// setup required variables
 var Botkit = require('./lib/Botkit.js');
 var os = require('os');
-
+// Controller is the main botkit mechanism to handle bot mgmt
 var controller = Botkit.slackbot({
     debug: true,
 });
-
+// bot - start your engine!
 var bot = controller.spawn({
-    token: process.env.token
 }).startRTM();
 
 
@@ -117,6 +127,88 @@ controller.hears(['call me (.*)', 'my name is (.*)'], 'direct_message,direct_men
         });
     });
 });
+
+// ===== IMGUR !!!! =======
+controller.hears(["(.*)imgur "+"(.*)"], 'direct_message,direct_mention,mention', function(bot, message) {
+    var mysearch = message.match[2];
+	var request = require("request");
+	var options = {
+		url: 'http://imgur.com/search/relevance',
+		qs: {"q":mysearch}
+	}
+	try{	
+		request(options,function (error, response, body){
+			//console.log(error,response,body);
+			var scrapedImageFileName = (body.split('src="//i.imgur.com/')[1].split('" />')[0]);
+			var fullURLToImage = "http://i.imgur.com/"+scrapedImageFileName;
+			console.log(fullURLToImage)
+			bot.reply(message,{
+					text:'',
+		    		attachments: [
+				        {
+			            "fallback": "Ha ha! your client doesn't show images!",
+			            "image_url": fullURLToImage
+		        		}
+				    ]
+				})	
+		})
+	}	catch 	(e){
+		bot.reply(message, 'Imgur search failed :( Rephrase your search maybe....')
+	}
+})
+
+
+controller.hears(["(.*)weather in"+"(.*)?"], 'direct_message,direct_mention,mention', function(bot, message) {
+    var city = message.match[2];
+	var request = require('request');
+		request('http://api.openweathermap.org/data/2.5/weather?q='+city+'&appid=3c1e43849b73fb7848c8e9663ee3ee36&units=metric', function (error, response, body) {
+		  if (!error && response.statusCode == 200) {
+		  	var parsedbody = JSON.parse(body)
+		  	var temp = parsedbody.main.temp
+		  	 bot.reply(message,'the temperture in '+parsedbody.name+' is '+temp)
+		//  	console.log(temp)
+		//    console.log(parsedbody.main)
+		  }
+		})
+});
+
+controller.hears(["(.*)weather?"], 'direct_message,direct_mention,mention', function(bot, message) {
+    var blurb = message.match[1];
+	var request = require('request');
+		request('http://api.openweathermap.org/data/2.5/weather?q=tel aviv&appid=3c1e43849b73fb7848c8e9663ee3ee36&units=metric', function (error, response, body) {
+		  if (!error && response.statusCode == 200) {
+		  	var parsedbody = JSON.parse(body)
+		  	var temp = parsedbody.main.temp
+		  	 bot.reply(message,'the temperture in '+parsedbody.name+' is '+temp)
+		//  	console.log(temp)
+		//    console.log(parsedbody.main)
+		  }
+		})
+});
+
+controller.hears(["(.*)latest technews", "(.*)latest tech news"], 'direct_message,direct_mention,mention', function(bot, message) {
+    var blurb = message.match[1];
+	var request = require('request');
+request('https://www.reddit.com/r/technews/hot.json?limit=5', function (error, response, body) {
+  if (!error && response.statusCode == 200) {
+  	var parsedbody = JSON.parse(body)
+  	//var temp = parsedbody.main.temp
+  	//console.log(temp)
+   // console.log(parsedbody.data.children)
+   var newsoutput=''
+   for (var i in parsedbody.data.children){
+   	var item = parsedbody.data.children[i]
+   	//console.log(item.data.title)
+   	//console.log(item.data.url)
+   	//console.log(' ')
+   	newsoutput=newsoutput+item.data.title+'\n'+item.data.url+'\n\n'
+   } 
+   	bot.reply(message, 'here are the latest tech news: \n'+newsoutput)
+  }
+})
+});
+
+
 
 controller.hears(['what is my name', 'who am i'], 'direct_message,direct_mention,mention', function(bot, message) {
 
